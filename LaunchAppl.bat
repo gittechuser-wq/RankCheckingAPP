@@ -4,7 +4,7 @@ setlocal
 cd /d "%~dp0"
 
 echo ==========================================
-echo   Keyword Mapping Tool
+echo   Keyword Mapping + SEO Research Tool
 echo ==========================================
 echo.
 
@@ -49,6 +49,6 @@ echo Keep this window open while using the tool.
 echo.
 
 start "" "http://localhost:5173"
-call npm run dev -- --port 5173
+call npm run dev:full
 
 pause

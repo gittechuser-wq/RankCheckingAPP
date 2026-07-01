@@ -13,10 +13,14 @@ import { processKeywordMapping } from "./services/keywordProcessor";
 import { ColumnMapping, InputMode, LogEntry, ParsedSheet, ProcessingResult, ProgressState, RequiredField, WorkbookInput } from "./types";
 import { autoMapColumns, fieldLabel, requiredFields, validateMapping } from "./utils/columns";
 import { downloadLogs, downloadNotFoundReport, downloadUpdatedDestination } from "./utils/downloads";
+import { AliyanProductMatcher } from "./features/aliyan/AliyanProductMatcher";
+import { SeoKeywordResearchTool } from "./features/seo/SeoKeywordResearchTool";
+import { AdminPanel } from "./features/admin/AdminPanel";
+import { AdminSettings, DEFAULT_ADMIN_SETTINGS, loadAdminSettings, saveAdminSettings, ToolKey } from "./features/admin/adminSettings";
 
 const emptyProgress: ProgressState = { processed: 0, total: 0, percent: 0 };
 
-export function App() {
+function KeywordMappingApp({ onOpenSeo, settings }: { onOpenSeo: () => void; settings: AdminSettings }) {
   const [mode, setMode] = useState<InputMode>("excel");
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [destinationFile, setDestinationFile] = useState<File | null>(null);
@@ -125,7 +129,7 @@ export function App() {
         destination: workbook.destination,
         sourceMapping: sourceMapping as ColumnMapping,
         destinationMapping: destinationMapping as ColumnMapping,
-        batchSize: 500,
+        batchSize: settings.keywordMapping.batchSize,
         onProgress: setProgress,
         onLog: addLog,
       });
@@ -158,13 +162,19 @@ export function App() {
     <main className="app-shell">
       <section className="header-band">
         <div>
-          <p className="eyebrow">Google Sheets Keyword Mapping Tool</p>
-          <h1>Compare keyword sheets and update matching destination rows.</h1>
+          <p className="eyebrow">{settings.modules.keyword.eyebrow}</p>
+          <h1>{settings.modules.keyword.title}</h1>
         </div>
-        <button className="primary-action" onClick={runProcessing} disabled={isBusy || !workbook}>
-          <Play size={18} />
-          Process
-        </button>
+        <div className="header-actions">
+          <button className="secondary-action inline-action" onClick={onOpenSeo}>
+            <ListRestart size={18} />
+            Open SEO Keyword Research
+          </button>
+          <button className="primary-action" onClick={runProcessing} disabled={isBusy || !workbook}>
+            <Play size={18} />
+            Process
+          </button>
+        </div>
       </section>
 
       <section className="workspace-grid">
@@ -241,6 +251,56 @@ export function App() {
         />
       )}
     </main>
+  );
+}
+
+export function App() {
+  const [activeTool, setActiveTool] = useState<ToolKey | "admin">("keyword");
+  const [settings, setSettings] = useState<AdminSettings>(() => loadAdminSettings());
+
+  useEffect(() => {
+    saveAdminSettings(settings);
+    if (activeTool !== "admin" && !settings.modules[activeTool].enabled) {
+      const fallback = (["keyword", "aliyan", "seo"] as ToolKey[]).find((tool) => settings.modules[tool].enabled) ?? "admin";
+      setActiveTool(fallback);
+    }
+  }, [activeTool, settings]);
+
+  function openTool(tool: ToolKey) {
+    if (settings.modules[tool].enabled) {
+      setActiveTool(tool);
+    }
+  }
+
+  return (
+    <>
+      <nav className="tool-navigation" aria-label="Application tools">
+        {(["keyword", "aliyan", "seo"] as ToolKey[]).map((tool) => (
+          settings.modules[tool].enabled && (
+            <button key={tool} className={activeTool === tool ? "active" : ""} onClick={() => openTool(tool)}>
+              {settings.modules[tool].label}
+            </button>
+          )
+        ))}
+        <button className={activeTool === "admin" ? "active" : ""} onClick={() => setActiveTool("admin")}>Admin Panel</button>
+      </nav>
+      <div className="floating-tool-switcher" aria-label="Quick tool switcher">
+        {settings.modules.seo.enabled && <button className={activeTool === "seo" ? "active" : ""} onClick={() => openTool("seo")}>{settings.modules.seo.label}</button>}
+        {settings.modules.keyword.enabled && <button className={activeTool === "keyword" ? "active" : ""} onClick={() => openTool("keyword")}>{settings.modules.keyword.label}</button>}
+      </div>
+      <div className={activeTool === "keyword" ? "tool-view active" : "tool-view"} aria-hidden={activeTool !== "keyword"}>
+        <KeywordMappingApp onOpenSeo={() => openTool("seo")} settings={settings} />
+      </div>
+      <div className={activeTool === "aliyan" ? "tool-view active" : "tool-view"} aria-hidden={activeTool !== "aliyan"}>
+        <AliyanProductMatcher settings={settings} />
+      </div>
+      <div className={activeTool === "seo" ? "tool-view active" : "tool-view"} aria-hidden={activeTool !== "seo"}>
+        <SeoKeywordResearchTool settings={settings} />
+      </div>
+      <div className={activeTool === "admin" ? "tool-view active" : "tool-view"} aria-hidden={activeTool !== "admin"}>
+        <AdminPanel settings={settings} onChange={setSettings} onReset={() => setSettings(DEFAULT_ADMIN_SETTINGS)} />
+      </div>
+    </>
   );
 }
 
